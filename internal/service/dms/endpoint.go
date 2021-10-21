@@ -465,12 +465,14 @@ func resourceEndpointCreate(d *schema.ResourceData, meta interface{}) error {
 		request.KinesisSettings = expandDmsKinesisSettings(d.Get("kinesis_settings").([]interface{})[0].(map[string]interface{}))
 	case engineNameMongodb:
 		request.MongoDbSettings = &dms.MongoDbSettings{
-			Username:     aws.String(d.Get("username").(string)),
-			Password:     aws.String(d.Get("password").(string)),
-			ServerName:   aws.String(d.Get("server_name").(string)),
-			Port:         aws.Int64(int64(d.Get("port").(int))),
-			DatabaseName: aws.String(d.Get("database_name").(string)),
-			KmsKeyId:     aws.String(d.Get("kms_key_arn").(string)),
+			Username:                    aws.String(d.Get("username").(string)),
+			Password:                    aws.String(d.Get("password").(string)),
+			ServerName:                  aws.String(d.Get("server_name").(string)),
+			Port:                        aws.Int64(int64(d.Get("port").(int))),
+			DatabaseName:                aws.String(d.Get("database_name").(string)),
+			KmsKeyId:                    aws.String(d.Get("kms_key_arn").(string)),
+			SecretsManagerSecretId:      aws.String(d.Get("secrets_manager_secret_id").(string)),
+			SecretsManagerAccessRoleArn: aws.String(d.Get("secrets_manager_access_role_arn").(string)),
 
 			AuthType:          aws.String(d.Get("mongodb_settings.0.auth_type").(string)),
 			AuthMechanism:     aws.String(d.Get("mongodb_settings.0.auth_mechanism").(string)),
@@ -478,6 +480,42 @@ func resourceEndpointCreate(d *schema.ResourceData, meta interface{}) error {
 			ExtractDocId:      aws.String(d.Get("mongodb_settings.0.extract_doc_id").(string)),
 			DocsToInvestigate: aws.String(d.Get("mongodb_settings.0.docs_to_investigate").(string)),
 			AuthSource:        aws.String(d.Get("mongodb_settings.0.auth_source").(string)),
+		}
+
+		// Set connection info in top-level namespace as well
+		request.Username = aws.String(d.Get("username").(string))
+		request.Password = aws.String(d.Get("password").(string))
+		request.ServerName = aws.String(d.Get("server_name").(string))
+		request.Port = aws.Int64(int64(d.Get("port").(int)))
+		request.DatabaseName = aws.String(d.Get("database_name").(string))
+	case engineNameMySQL:
+		request.MySQLSettings = &dms.MySQLSettings{
+			Username:     aws.String(d.Get("username").(string)),
+			Password:     aws.String(d.Get("password").(string)),
+			ServerName:   aws.String(d.Get("server_name").(string)),
+			Port:         aws.Int64(int64(d.Get("port").(int))),
+			DatabaseName: aws.String(d.Get("database_name").(string)),
+
+			SecretsManagerAccessRoleArn: aws.String(d.Get("mysql_settings.0.secrets_manager_access_role_arn").(string)),
+			SecretsManagerSecretId:      aws.String(d.Get("mysql_settings.0.secrets_manager_secret_id").(string)),
+		}
+
+		// Set connection info in top-level namespace as well
+		request.Username = aws.String(d.Get("username").(string))
+		request.Password = aws.String(d.Get("password").(string))
+		request.ServerName = aws.String(d.Get("server_name").(string))
+		request.Port = aws.Int64(int64(d.Get("port").(int)))
+		request.DatabaseName = aws.String(d.Get("database_name").(string))
+	case engineNamePostgres:
+		request.PostgreSQLSettings = &dms.PostgreSQLSettings{
+			Username:     aws.String(d.Get("username").(string)),
+			Password:     aws.String(d.Get("password").(string)),
+			ServerName:   aws.String(d.Get("server_name").(string)),
+			Port:         aws.Int64(int64(d.Get("port").(int))),
+			DatabaseName: aws.String(d.Get("database_name").(string)),
+
+			SecretsManagerAccessRoleArn: aws.String(d.Get("postgresql_settings.0.secrets_manager_access_role_arn").(string)),
+			SecretsManagerSecretId:      aws.String(d.Get("postgresql_settings.0.secrets_manager_secret_id").(string)),
 		}
 
 		// Set connection info in top-level namespace as well
@@ -502,6 +540,24 @@ func resourceEndpointCreate(d *schema.ResourceData, meta interface{}) error {
 			ServerSideEncryptionKmsKeyId:  aws.String(d.Get("s3_settings.0.server_side_encryption_kms_key_id").(string)),
 			ServiceAccessRoleArn:          aws.String(d.Get("s3_settings.0.service_access_role_arn").(string)),
 		}
+	case engineNameSQLServer:
+		request.MicrosoftSQLServerSettings = &dms.MicrosoftSQLServerSettings{
+			Username:     aws.String(d.Get("username").(string)),
+			Password:     aws.String(d.Get("password").(string)),
+			ServerName:   aws.String(d.Get("server_name").(string)),
+			Port:         aws.Int64(int64(d.Get(".port").(int))),
+			DatabaseName: aws.String(d.Get("database_name").(string)),
+
+			SecretsManagerAccessRoleArn: aws.String(d.Get("sqlserver_settings.0.secrets_manager_access_role_arn").(string)),
+			SecretsManagerSecretId:      aws.String(d.Get("sqlserver_settings.0.secrets_manager_secret_id").(string)),
+		}
+
+		// Set connection info in top-level namespace as well
+		request.Username = aws.String(d.Get("username").(string))
+		request.Password = aws.String(d.Get("password").(string))
+		request.ServerName = aws.String(d.Get("server_name").(string))
+		request.Port = aws.Int64(int64(d.Get("port").(int)))
+		request.DatabaseName = aws.String(d.Get("database_name").(string))
 	default:
 		request.Password = aws.String(d.Get("password").(string))
 		request.Port = aws.Int64(int64(d.Get("port").(int)))
@@ -719,6 +775,56 @@ func resourceEndpointUpdate(d *schema.ResourceData, meta interface{}) error {
 
 			hasChanges = true
 		}
+	case engineNameMySQL:
+		if d.HasChanges(
+			"username", "password", "server_name", "port", "database_name", "mysql_settings.0.secrets_manager_access_role_arn",
+			"mysql_settings.0.secrets_manager_access_secret_id") {
+			request.MySQLSettings = &dms.MySQLSettings{
+				Username:     aws.String(d.Get("username").(string)),
+				Password:     aws.String(d.Get("password").(string)),
+				ServerName:   aws.String(d.Get("server_name").(string)),
+				Port:         aws.Int64(int64(d.Get("port").(int))),
+				DatabaseName: aws.String(d.Get("database_name").(string)),
+
+				SecretsManagerAccessRoleArn: aws.String(d.Get("mysql_settings.0.secrets_manager_access_role_arn").(string)),
+				SecretsManagerSecretId:      aws.String(d.Get("mysql_settings.0.secrets_manager_access_secret_id").(string)),
+			}
+			request.EngineName = aws.String(engineName)
+
+			// Update connection info in top-level namespace as well
+			request.Username = aws.String(d.Get("username").(string))
+			request.Password = aws.String(d.Get("password").(string))
+			request.ServerName = aws.String(d.Get("server_name").(string))
+			request.Port = aws.Int64(int64(d.Get("port").(int)))
+			request.DatabaseName = aws.String(d.Get("database_name").(string))
+
+			hasChanges = true
+		}
+	case engineNamePostgres:
+		if d.HasChanges(
+			"username", "password", "server_name", "port", "database_name", "postgresql_settings.0.secrets_manager_access_role_arn",
+			"postgresql_settings.0.secrets_manager_access_secret_id") {
+			request.PostgreSQLSettings = &dms.PostgreSQLSettings{
+				Username:     aws.String(d.Get("username").(string)),
+				Password:     aws.String(d.Get("password").(string)),
+				ServerName:   aws.String(d.Get("server_name").(string)),
+				Port:         aws.Int64(int64(d.Get("port").(int))),
+				DatabaseName: aws.String(d.Get("database_name").(string)),
+
+				SecretsManagerAccessRoleArn: aws.String(d.Get("postgresql_settings.0.secrets_manager_access_role_arn").(string)),
+				SecretsManagerSecretId:      aws.String(d.Get("postgresql_settings.0.secrets_manager_access_secret_id").(string)),
+			}
+			request.EngineName = aws.String(engineName)
+
+			// Update connection info in top-level namespace as well
+			request.Username = aws.String(d.Get("username").(string))
+			request.Password = aws.String(d.Get("password").(string))
+			request.ServerName = aws.String(d.Get("server_name").(string))
+			request.Port = aws.Int64(int64(d.Get("port").(int)))
+			request.DatabaseName = aws.String(d.Get("database_name").(string))
+
+			hasChanges = true
+		}
 	case engineNameS3:
 		if d.HasChanges(
 			"s3_settings.0.service_access_role_arn", "s3_settings.0.external_table_definition",
@@ -743,6 +849,32 @@ func resourceEndpointUpdate(d *schema.ResourceData, meta interface{}) error {
 			request.EngineName = aws.String(engineName)
 			hasChanges = true
 		}
+	case engineNameSQLServer:
+		if d.HasChanges(
+			"username", "password", "server_name", "port", "database_name", "sqlserver_settings.0.secrets_manager_access_role_arn",
+			"sqlserver_settings.0.secrets_manager_access_secret_id") {
+			request.MicrosoftSQLServerSettings = &dms.MicrosoftSQLServerSettings{
+				Username:     aws.String(d.Get("username").(string)),
+				Password:     aws.String(d.Get("password").(string)),
+				ServerName:   aws.String(d.Get("server_name").(string)),
+				Port:         aws.Int64(int64(d.Get("port").(int))),
+				DatabaseName: aws.String(d.Get("database_name").(string)),
+
+				SecretsManagerAccessRoleArn: aws.String(d.Get("sqlserver_settings.0.secrets_manager_access_role_arn").(string)),
+				SecretsManagerSecretId:      aws.String(d.Get("sqlserver_settings.0.secrets_manager_access_secret_id").(string)),
+			}
+			request.EngineName = aws.String(engineName)
+
+			// Update connection info in top-level namespace as well
+			request.Username = aws.String(d.Get("username").(string))
+			request.Password = aws.String(d.Get("password").(string))
+			request.ServerName = aws.String(d.Get("server_name").(string))
+			request.Port = aws.Int64(int64(d.Get("port").(int)))
+			request.DatabaseName = aws.String(d.Get("database_name").(string))
+
+			hasChanges = true
+		}
+
 	default:
 		if d.HasChange("database_name") {
 			request.DatabaseName = aws.String(d.Get("database_name").(string))
@@ -889,9 +1021,21 @@ func resourceEndpointSetState(d *schema.ResourceData, endpoint *dms.Endpoint) er
 		if err := d.Set("mongodb_settings", flattenDmsMongoDbSettings(endpoint.MongoDbSettings)); err != nil {
 			return fmt.Errorf("Error setting mongodb_settings for DMS: %s", err)
 		}
+	case "mysql":
+		if err := d.Set("mysql_settings", flattenDmsMySQLSettings(endpoint.MySQLSettings)); err != nil {
+			return fmt.Errorf("Error setting mysql_settings for DMS: %s", err)
+		}
+	case "postgres":
+		if err := d.Set("postgresql_settings", flattenDmsPostgreSQLSettings(endpoint.PostgreSQLSettings)); err != nil {
+			return fmt.Errorf("Error setting postgresql_settings for DMS: %s", err)
+		}
 	case "s3":
 		if err := d.Set("s3_settings", flattenDmsS3Settings(endpoint.S3Settings)); err != nil {
 			return fmt.Errorf("Error setting s3_settings for DMS: %s", err)
+		}
+	case "sqlserver":
+		if err := d.Set("sqlserver_settings", flattenDmsMicrosoftSQLServerSettings(endpoint.MicrosoftSQLServerSettings)); err != nil {
+			return fmt.Errorf("Error setting sqlserver_settings for DMS: %s", err)
 		}
 	default:
 		d.Set("database_name", endpoint.DatabaseName)
@@ -1195,6 +1339,32 @@ func flattenDmsMongoDbSettings(settings *dms.MongoDbSettings) []map[string]inter
 	return []map[string]interface{}{m}
 }
 
+func flattenDmsMySQLSettings(settings *dms.MySQLSettings) []map[string]interface{} {
+	if settings == nil {
+		return []map[string]interface{}{}
+	}
+
+	m := map[string]interface{}{
+		"secrets_manager_access_role_arn": aws.StringValue(settings.SecretsManagerAccessRoleArn),
+		"secrets_manager_secret_id":       aws.StringValue(settings.SecretsManagerSecretId),
+	}
+
+	return []map[string]interface{}{m}
+}
+
+func flattenDmsPostgreSQLSettings(settings *dms.PostgreSQLSettings) []map[string]interface{} {
+	if settings == nil {
+		return []map[string]interface{}{}
+	}
+
+	m := map[string]interface{}{
+		"secrets_manager_access_role_arn": aws.StringValue(settings.SecretsManagerAccessRoleArn),
+		"secrets_manager_secret_id":       aws.StringValue(settings.SecretsManagerSecretId),
+	}
+
+	return []map[string]interface{}{m}
+}
+
 func flattenDmsS3Settings(settings *dms.S3Settings) []map[string]interface{} {
 	if settings == nil {
 		return []map[string]interface{}{}
@@ -1214,6 +1384,19 @@ func flattenDmsS3Settings(settings *dms.S3Settings) []map[string]interface{} {
 		"parquet_version":                   aws.StringValue(settings.ParquetVersion),
 		"server_side_encryption_kms_key_id": aws.StringValue(settings.ServerSideEncryptionKmsKeyId),
 		"service_access_role_arn":           aws.StringValue(settings.ServiceAccessRoleArn),
+	}
+
+	return []map[string]interface{}{m}
+}
+
+func flattenDmsMicrosoftSQLServerSettings(settings *dms.MicrosoftSQLServerSettings) []map[string]interface{} {
+	if settings == nil {
+		return []map[string]interface{}{}
+	}
+
+	m := map[string]interface{}{
+		"secrets_manager_access_role_arn": aws.StringValue(settings.SecretsManagerAccessRoleArn),
+		"secrets_manager_secret_id":       aws.StringValue(settings.SecretsManagerSecretId),
 	}
 
 	return []map[string]interface{}{m}
